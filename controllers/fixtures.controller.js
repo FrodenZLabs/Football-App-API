@@ -1,3 +1,4 @@
+import { io } from "../index.js";
 import client from "../utils/apiClient.js";
 import { errorHandler } from "../utils/error.js";
 
@@ -6,11 +7,40 @@ export const getFixtures = async (request, response, next) => {
   const queryParams = request.query;
 
   try {
-    const results = await client.get("/fixtures", {
-      params: queryParams,
+    const results = await client.get("/fixtures", { params: queryParams });
+
+    // ✅ Normal response for non-live queries
+    if (!queryParams.live) {
+      return response
+        .status(200)
+        .json({ success: true, data: results.data.response });
+    }
+
+    // ✅ For live queries, start pushing updates via socket.io
+    response.status(200).json({
+      success: true,
+      message: "Live updates started. Connect via socket.io",
     });
 
-    response.status(200).json({ success: true, data: results.data.response });
+    // Poll API every 15 seconds (can be tuned)
+    const interval = setInterval(async () => {
+      try {
+        const liveResults = await client.get("/fixtures", {
+          params: queryParams,
+        });
+        io.emit("liveFixtures", liveResults.data.response);
+      } catch (err) {
+        console.error("❌ Error fetching live fixtures:", err.message);
+      }
+    }, 15000);
+
+    // Stop polling when no clients are connected
+    io.on("disconnect", () => {
+      if (io.engine.clientsCount === 0) {
+        clearInterval(interval);
+        console.log("🛑 Stopped live updates (no clients connected)");
+      }
+    });
   } catch (error) {
     console.error("❌ Error fetching fixtures:", error);
     next(errorHandler(500, "Error fetching fixtures."));

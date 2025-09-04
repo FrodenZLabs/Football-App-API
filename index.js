@@ -1,5 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
+import http from "http";
+import { Server } from "socket.io";
 import fixturesRoutes from "./routes/fixtures.routes.js";
 import standingsRoutes from "./routes/standings.routes.js";
 import leaguesRoutes from "./routes/leagues.routes.js";
@@ -13,9 +15,27 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 
+// ✅ Wrap express app with HTTP server
+const server = http.createServer(app);
+
+// ✅ Attach Socket.IO
+export const io = new Server(server, {
+  cors: {
+    origin: "*",
+  },
+});
+
+io.on("connection", (socket) => {
+  console.log("✅ Client connected:", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("❌ Client disconnected:", socket.id);
+  });
+});
+
 const PORT = process.env.PORT;
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
 
